@@ -8,6 +8,7 @@
   body,
   #root {
     @apply h-full w-full overflow-hidden;
+    background: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

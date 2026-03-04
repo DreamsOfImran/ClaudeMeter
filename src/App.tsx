@@ -76,8 +76,8 @@ function AppInner() {
       className="
         flex h-screen w-full flex-col overflow-hidden
         rounded-popover bg-white text-gray-900
-        shadow-popover
-        dark:bg-[#1a1a1c] dark:text-gray-50 dark:shadow-popover-dark
+        border border-black/[0.1]
+        dark:bg-[#1a1a1c] dark:text-gray-50 dark:border-white/[0.1]
         animate-fade-in
       "
     >

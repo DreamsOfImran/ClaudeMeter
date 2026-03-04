@@ -41,7 +41,7 @@ function Gauge({ label, percent, resetTime, color }: GaugeProps) {
       </div>
 
       {resetTime && (
-        <p className="text-[10px] text-gray-400 dark:text-gray-600 truncate">
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
           Resets {resetTime}
         </p>
       )}
@@ -53,7 +53,7 @@ export function UsageCard({ data }: UsageCardProps) {
   return (
     <section className="px-3 flex flex-col gap-1.5">
       <Gauge
-        label="Session"
+        label="Current Session"
         percent={data.sessionPercent}
         resetTime={data.sessionResetTime}
         color="bg-blue-400 dark:bg-blue-500"

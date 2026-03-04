@@ -21,7 +21,7 @@ export function Footer({ lastRefresh, isLoading, interval, onIntervalChange }: F
 
   return (
     <footer className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-gray-800">
-      <span className="tabular text-[10px] text-gray-400 dark:text-gray-600">
+      <span className="tabular text-[10px] text-gray-500 dark:text-gray-400">
         {label}
       </span>
 

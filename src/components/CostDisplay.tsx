@@ -61,7 +61,7 @@ export function CostDisplay({ data }: CostDisplayProps) {
           <div className="px-3 pb-3">
             <ExtraBar spent={data.extraSpent} limit={data.extraLimit} />
             {data.extraReset && (
-              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-600">
+              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">
                 Resets {data.extraReset}
               </p>
             )}
