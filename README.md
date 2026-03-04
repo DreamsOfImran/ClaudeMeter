@@ -2,7 +2,7 @@
 
 A menu bar / system tray app that displays your Claude.ai usage in real-time. Available for macOS, Windows, and Linux.
 
-<div align="center"><img src="public/logo.png" width="120" /></div>
+<div align="center"><img src="ClaudeMeter-Screenshot.png" width="120" /></div>
 
 ## Features
 
