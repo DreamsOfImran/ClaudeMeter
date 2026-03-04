@@ -1,6 +1,6 @@
 [package]
 name = "claude-meter"
-version = "0.1.0"
+version = "0.1.1"
 description = "Claude API usage monitor — menubar app"
 authors = []
 license = ""
