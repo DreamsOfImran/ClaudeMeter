@@ -56,3 +56,9 @@ export const getRefreshInterval = (): Promise<number> =>
 /** Open the claude.ai login page in a hidden WebView. */
 export const openLoginWindow = (): Promise<void> =>
   invoke<void>("open_login_window");
+
+/** Manually trigger an update check (emits update-available or update-not-available). */
+export const checkUpdate = (): Promise<void> => invoke<void>("check_update");
+
+/** Download and install the latest update, then restart the app. */
+export const installUpdate = (): Promise<void> => invoke<void>("install_update");

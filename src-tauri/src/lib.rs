@@ -15,6 +15,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::new(Mutex::new(AppState::new())))
         .setup(|app| {
             // Tray-only app: no dock icon on macOS.
@@ -30,6 +31,13 @@ pub fn run() {
                 polling::start_polling(handle).await;
             });
 
+            // Silent background update check — 15 s after startup.
+            let update_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+                commands::updater::perform_update_check(&update_handle, false).await;
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -39,6 +47,8 @@ pub fn run() {
             commands::usage::get_refresh_interval,
             commands::usage::open_login_window,
             commands::usage::sign_out,
+            commands::updater::check_update,
+            commands::updater::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

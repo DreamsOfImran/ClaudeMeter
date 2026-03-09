@@ -25,6 +25,8 @@
     "store:allow-delete",
     "store:allow-has",
     "store:allow-clear",
-    "store:allow-entries"
+    "store:allow-entries",
+    "updater:allow-check",
+    "updater:allow-download-and-install"
   ]
 }

@@ -70,4 +70,6 @@ jobs:
             **Linux** → `.AppImage` or `.deb`
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          updaterJsonKeepUniversal: true
+          updaterJsonPreferNsis: true
           args: ${{ matrix.args }}

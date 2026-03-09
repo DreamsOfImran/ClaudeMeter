@@ -52,10 +52,11 @@ fn decode_icon(png_bytes: &[u8]) -> Option<Image<'static>> {
 pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let auth_i = MenuItem::with_id(app, "auth", "Sign In", true, None::<&str>)?;
     let refresh_i = MenuItem::with_id(app, "refresh", "Refresh Now", true, None::<&str>)?;
+    let update_i = MenuItem::with_id(app, "update", "Check for Update", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit_i = MenuItem::with_id(app, "quit", "Quit ClaudeMeter", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&auth_i, &refresh_i, &sep, &quit_i])?;
+    let menu = Menu::with_items(app, &[&auth_i, &refresh_i, &update_i, &sep, &quit_i])?;
 
     // Start with the green icon; it will be updated after the first fetch.
     let initial_icon = decode_icon(ICON_GREEN_PNG)
@@ -140,6 +141,12 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
                     }
                 });
             }
+            "update" => {
+                let app_clone = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::commands::updater::perform_update_check(&app_clone, true).await;
+                });
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -159,6 +166,11 @@ pub fn update_auth_menu_item(app: &AppHandle, is_logged_in: bool) {
     else {
         return;
     };
+    let Ok(update_i) =
+        MenuItem::with_id(app, "update", "Check for Update", true, None::<&str>)
+    else {
+        return;
+    };
     let Ok(sep) = PredefinedMenuItem::separator(app) else {
         return;
     };
@@ -166,7 +178,7 @@ pub fn update_auth_menu_item(app: &AppHandle, is_logged_in: bool) {
     else {
         return;
     };
-    if let Ok(menu) = Menu::with_items(app, &[&auth_i, &refresh_i, &sep, &quit_i]) {
+    if let Ok(menu) = Menu::with_items(app, &[&auth_i, &refresh_i, &update_i, &sep, &quit_i]) {
         if let Some(tray) = app.tray_by_id("main-tray") {
             let _ = tray.set_menu(Some(menu));
         }

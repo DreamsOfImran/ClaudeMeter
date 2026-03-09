@@ -12,6 +12,7 @@ import { Footer } from "./components/Footer";
 import { ErrorState } from "./components/ErrorState";
 import { LoadingState } from "./components/LoadingState";
 import { LoginSetup } from "./components/LoginSetup";
+import { UpdateBanner } from "./components/UpdateBanner";
 
 // ─── Inner app (has access to store context) ──────────────────────────────────
 
@@ -29,6 +30,9 @@ function AppInner() {
 
   // Whether the user has kicked off the login flow (waiting for auth).
   const [awaitingLogin, setAwaitingLogin] = useState(false);
+
+  // Available update version, if any.
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
 
   // Hide window on blur — macOS popover style.
   useEffect(() => {
@@ -52,6 +56,19 @@ function AppInner() {
     }).then((fn) => { unlisten = fn; });
     return () => unlisten?.();
   }, [triggerRefresh, refresh]);
+
+  // Listen for update events from the Rust backend.
+  useEffect(() => {
+    let unlistenAvailable: (() => void) | undefined;
+    let unlistenNone: (() => void) | undefined;
+    listen<{ version: string }>("update-available", (e) => {
+      setUpdateVersion(e.payload.version);
+    }).then((fn) => { unlistenAvailable = fn; });
+    listen("update-not-available", () => {
+      // Briefly show "up to date" — handled by tray tooltip; nothing to show here.
+    }).then((fn) => { unlistenNone = fn; });
+    return () => { unlistenAvailable?.(); unlistenNone?.(); };
+  }, []);
 
   const handleThemeCycle = useCallback(() => {
     const cycle: ThemePreference[] = ["system", "light", "dark"];
@@ -149,6 +166,13 @@ function AppInner() {
           </div>
         )}
       </div>
+
+      {updateVersion && (
+        <UpdateBanner
+          version={updateVersion}
+          onDismiss={() => setUpdateVersion(null)}
+        />
+      )}
 
       <div className="mx-4 h-px bg-gray-100 dark:bg-gray-800" />
 
