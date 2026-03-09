@@ -12,6 +12,7 @@ interface GaugeProps {
 }
 
 function Gauge({ label, percent, resetTime, color }: GaugeProps) {
+  const known = percent != null;
   const pct = percent ?? 0;
   const barColor =
     pct >= 95 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : color;
@@ -28,15 +29,15 @@ function Gauge({ label, percent, resetTime, color }: GaugeProps) {
         <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
           {label}
         </span>
-        <span className={`tabular text-[13px] font-bold ${pctColor}`}>
-          {percent != null ? `${percent}%` : "—"}
+        <span className={`tabular text-[13px] font-bold ${known ? pctColor : "text-gray-300 dark:text-gray-600"}`}>
+          {known ? `${percent}%` : "—"}
         </span>
       </div>
 
       <div className="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
         <div
-          className={`h-full rounded-full transition-all duration-700 ${barColor}`}
-          style={{ width: `${Math.min(pct, 100)}%` }}
+          className={`h-full rounded-full transition-all duration-700 ${known ? barColor : ""}`}
+          style={{ width: `${known ? Math.min(pct, 100) : 0}%` }}
         />
       </div>
 

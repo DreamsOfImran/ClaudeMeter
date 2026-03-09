@@ -67,8 +67,8 @@ pub async fn fetch_usage_from_session<R: Runtime>(
     let webview = get_or_create_claude_webview(app, "https://claude.ai/settings/usage")?;
     let _ = webview.hide(); // keep it invisible while scraping
 
-    // Wait for the page to load fully.
-    tokio::time::sleep(Duration::from_secs(4)).await;
+    // Give the page a moment to start loading before checking URL / injecting.
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // If redirected to login, the user is not authenticated.
     let url = webview
@@ -85,101 +85,110 @@ pub async fn fetch_usage_from_session<R: Runtime>(
         });
     }
 
-    // Inject the extraction script. Because window.__TAURI__ is not available
-    // on external pages, we encode the result in the URL hash and poll it.
+    // Inject an extraction script that retries until the React-rendered usage
+    // data appears in the DOM, then encodes the result in the URL hash.
+    // This avoids the race condition of injecting before the page has rendered.
     let extraction_script = r#"
         (function() {
-            function extractUsageData() {
-                const data = {
-                    sessionPercent: null,
-                    sessionResetTime: null,
-                    weeklyAllModelsPercent: null,
-                    weeklyAllModelsReset: null,
-                    weeklySonnetPercent: null,
-                    weeklySonnetReset: null,
-                    extraSpent: null,
-                    extraLimit: null,
-                    extraBalance: null,
-                    extraPercent: null,
-                    extraReset: null,
-                    isLoggedIn: true,
-                    error: null
-                };
+            // Prevent multiple concurrent extraction loops.
+            if (window.__tauriExtracting) return;
+            window.__tauriExtracting = true;
 
-                function findSectionByText(text) {
-                    const allElements = document.querySelectorAll('*');
-                    for (const el of allElements) {
-                        if (el.childNodes.length === 1 &&
-                            el.textContent &&
-                            el.textContent.trim() === text) {
-                            let parent = el.parentElement;
-                            for (let i = 0; i < 5 && parent; i++) {
-                                if (parent.textContent && parent.textContent.includes('%')) {
-                                    return parent;
-                                }
-                                parent = parent.parentElement;
-                            }
-                            return el.parentElement?.parentElement;
+            // Find a section container whose heading contains `text` (case-insensitive).
+            function findSection(text) {
+                const lower = text.toLowerCase();
+                const candidates = document.querySelectorAll(
+                    'h1,h2,h3,h4,h5,h6,span,p,div,label,strong,b'
+                );
+                for (const el of candidates) {
+                    const t = (el.textContent || '').trim().toLowerCase();
+                    // Match elements that ARE the heading (short text, close match)
+                    if (t === lower || (t.startsWith(lower) && t.length < lower.length + 8)) {
+                        // Walk up until we find a container that has a '%' sign
+                        let node = el.parentElement;
+                        for (let i = 0; i < 7 && node; i++) {
+                            if ((node.textContent || '').includes('%')) return node;
+                            node = node.parentElement;
                         }
                     }
-                    return null;
                 }
+                return null;
+            }
 
-                function extractPercent(container) {
-                    if (!container) return null;
-                    const text = container.textContent || '';
-                    const match = text.match(/(\d+)%\s*used/);
-                    return match ? parseInt(match[1], 10) : null;
+            function extractPercent(container) {
+                if (!container) return null;
+                const text = container.textContent || '';
+                // Try "Xused" format first, then plain "X%"
+                let m = text.match(/(\d+)\s*%\s*used/i);
+                if (!m) m = text.match(/(\d+(?:\.\d+)?)\s*%/);
+                return m ? Math.round(parseFloat(m[1])) : null;
+            }
+
+            function extractResetTime(container) {
+                if (!container) return null;
+                const text = container.textContent || '';
+                const m = text.match(/Resets?\s+(?:in\s+)?([^\n•·|]+)/i);
+                if (m) {
+                    let t = m[1].trim().replace(/\s*(Learn more|\d+\s*%|used).*$/i, '').trim();
+                    if (t.length > 0 && t.length < 60) return t;
                 }
+                return null;
+            }
 
-                function extractResetTime(container) {
-                    if (!container) return null;
-                    const text = container.textContent || '';
-                    const match = text.match(/Resets?\s+(?:in\s+)?([^\n]+)/i);
-                    if (match) {
-                        let time = match[1].trim();
-                        time = time.replace(/\s*(\d+%|used|Learn more).*$/i, '').trim();
-                        return time;
-                    }
-                    return null;
-                }
+            function tryExtract(attemptsLeft) {
+                const data = {
+                    sessionPercent: null, sessionResetTime: null,
+                    weeklyAllModelsPercent: null, weeklyAllModelsReset: null,
+                    weeklySonnetPercent: null, weeklySonnetReset: null,
+                    extraSpent: null, extraLimit: null, extraBalance: null,
+                    extraPercent: null, extraReset: null,
+                    isLoggedIn: true, error: null
+                };
 
-                const sessionSection = findSectionByText('Current session');
+                const sessionSection = findSection('Current session');
                 if (sessionSection) {
-                    data.sessionPercent = extractPercent(sessionSection);
-                    data.sessionResetTime = extractResetTime(sessionSection);
+                    data.sessionPercent    = extractPercent(sessionSection);
+                    data.sessionResetTime  = extractResetTime(sessionSection);
                 }
 
-                const allModelsSection = findSectionByText('All models');
+                const allModelsSection = findSection('All models');
                 if (allModelsSection) {
                     data.weeklyAllModelsPercent = extractPercent(allModelsSection);
-                    data.weeklyAllModelsReset = extractResetTime(allModelsSection);
+                    data.weeklyAllModelsReset   = extractResetTime(allModelsSection);
                 }
 
-                const sonnetSection = findSectionByText('Sonnet only');
+                const sonnetSection = findSection('Sonnet only');
                 if (sonnetSection) {
                     data.weeklySonnetPercent = extractPercent(sonnetSection);
-                    data.weeklySonnetReset = extractResetTime(sonnetSection);
+                    data.weeklySonnetReset   = extractResetTime(sonnetSection);
                 }
 
-                const extraSection = findSectionByText('Extra usage');
+                const extraSection = findSection('Extra usage');
                 if (extraSection) {
                     const extraText = extraSection.textContent || '';
                     data.extraPercent = extractPercent(extraSection);
-                    data.extraReset = extractResetTime(extraSection);
-                    const spentMatch = extraText.match(/[€$£]([\d.]+)\s*spent/);
-                    data.extraSpent = spentMatch ? parseFloat(spentMatch[1]) : null;
-                    const limitMatch = extraText.match(/[€$£](\d+).*Monthly spending limit/);
-                    data.extraLimit = limitMatch ? parseFloat(limitMatch[1]) : null;
-                    const balanceMatch = extraText.match(/[€$£]([\d.]+).*Current balance/);
-                    data.extraBalance = balanceMatch ? parseFloat(balanceMatch[1]) : null;
+                    data.extraReset   = extractResetTime(extraSection);
+                    const sm = extraText.match(/[€$£¥]([\d.]+)\s*spent/i);
+                    data.extraSpent = sm ? parseFloat(sm[1]) : null;
+                    const lm = extraText.match(/[€$£¥]([\d.]+)[^€$£¥]*(?:monthly spending limit|limit)/i);
+                    data.extraLimit = lm ? parseFloat(lm[1]) : null;
+                    const bm = extraText.match(/[€$£¥]([\d.]+)[^€$£¥]*(?:current balance|balance)/i);
+                    data.extraBalance = bm ? parseFloat(bm[1]) : null;
                 }
 
-                return data;
+                // If we found at least one section, encode and signal Rust.
+                const gotData = sessionSection || allModelsSection || sonnetSection;
+                if (gotData || attemptsLeft <= 0) {
+                    window.__tauriExtracting = false;
+                    window.location.hash = 'TAURI_RESULT:' + encodeURIComponent(JSON.stringify(data));
+                } else {
+                    // Page not ready yet — retry in 800 ms.
+                    setTimeout(function() { tryExtract(attemptsLeft - 1); }, 800);
+                }
             }
 
-            const extractedData = extractUsageData();
-            window.location.hash = 'TAURI_RESULT:' + encodeURIComponent(JSON.stringify(extractedData));
+            // Up to 20 retries × 800 ms = 16 s of DOM polling.
+            tryExtract(20);
         })();
     "#;
 
@@ -187,9 +196,9 @@ pub async fn fetch_usage_from_session<R: Runtime>(
         .eval(extraction_script)
         .map_err(|e| format!("Failed to execute JS: {}", e))?;
 
-    // Poll the URL hash for the result (up to 20 × 500 ms = 10 s).
-    for _ in 0..20 {
-        tokio::time::sleep(Duration::from_millis(500)).await;
+    // Poll the URL hash for the result (up to 30 × 1000 ms = 30 s).
+    for _ in 0..30 {
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         if let Ok(url) = webview.url() {
             let url_str = url.as_str();
@@ -214,7 +223,7 @@ pub async fn fetch_usage_from_session<R: Runtime>(
         }
     }
 
-    Err("Timeout: usage data not extracted within 10 s".to_string())
+    Err("Timeout: usage data not extracted within 30 s".to_string())
 }
 
 // ---------------------------------------------------------------------------
